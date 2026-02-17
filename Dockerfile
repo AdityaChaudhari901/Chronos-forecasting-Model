@@ -12,11 +12,10 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Force cache bust for pip install
-ARG CACHEBUST=1
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies with timestamp to force rebuild
+# This bypasses Kaniko's aggressive caching
+RUN echo "Build timestamp: 2026-02-17-15:11" && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy model and application code
 COPY finetuned_chronos_2/ ./finetuned_chronos_2/
