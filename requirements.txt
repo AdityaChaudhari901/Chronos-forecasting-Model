@@ -5,4 +5,5 @@ torch>=2.0.0
 numpy>=1.24.0
 pandas>=2.0.0
 tqdm>=4.65.0
+peft>=0.7.0
 git+https://github.com/amazon-science/chronos-forecasting.git
