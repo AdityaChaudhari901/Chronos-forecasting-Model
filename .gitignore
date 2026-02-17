@@ -1,0 +1,25 @@
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.env
+
+# MacOS
+.DS_Store
+
+# Large files / Data
+inventory_training_100sku_india_2years.csv
+chronos_inventory_forecaster.tar.gz
+chronos-2-finetuned/
+run_model.py
+
+# Logs
+*.log
+
+# Temp
+predictions/
+data_prepared/
+
+

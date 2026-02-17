@@ -1,0 +1,8 @@
+# Core dependencies - Updated 2026-02-17
+flask>=3.0.0
+gunicorn>=21.0.0
+torch>=2.0.0
+numpy>=1.24.0
+pandas>=2.0.0
+tqdm>=4.65.0
+git+https://github.com/amazon-science/chronos-forecasting.git
