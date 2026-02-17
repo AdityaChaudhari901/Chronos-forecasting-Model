@@ -5,6 +5,7 @@ from flask import Flask, request, jsonify, send_file
 from chronos import Chronos2Pipeline
 import numpy as np
 import pandas as pd
+import torch
 import io
 import os
 
@@ -122,6 +123,26 @@ def forecast_csv():
         if missing_cols:
             return jsonify({'error': f'Missing columns: {missing_cols}'}), 400
         
+        # Filter by SKU if specified (for multi-SKU datasets)
+        sku_id = request.args.get('sku_id')
+        if sku_id:
+            if 'id' not in df.columns:
+                return jsonify({'error': 'CSV must have "id" column to filter by SKU'}), 400
+            df = df[df['id'] == sku_id]
+            if len(df) == 0:
+                return jsonify({'error': f'No data found for SKU: {sku_id}'}), 404
+        elif 'id' in df.columns:
+            # If no SKU specified but ID column exists, use the first SKU
+            unique_skus = df['id'].unique()
+            if len(unique_skus) > 1:
+                return jsonify({
+                    'error': 'Multiple SKUs found in CSV. Please specify sku_id parameter.',
+                    'available_skus': unique_skus[:10].tolist(),  # Show first 10
+                    'total_skus': len(unique_skus)
+                }), 400
+            sku_id = unique_skus[0]
+            df = df[df['id'] == sku_id]
+        
         # Sort by timestamp and take last 90 days as historical data
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         df = df.sort_values('timestamp')
@@ -132,30 +153,29 @@ def forecast_csv():
         # Use last 90 days for historical data
         historical_df = df.tail(90)
         
-        # Prepare input data
+        # Prepare input data (convert to torch tensors)
         input_data = {
-            'target': historical_df['target'].values.astype(np.float32),
+            'target': torch.tensor(historical_df['target'].values, dtype=torch.float32),
             'past_covariates': {
-                'temperature': historical_df['temperature'].values.astype(np.float32),
-                'stockout_flag': historical_df['stockout_flag'].values.astype(np.float32),
-                'traffic': historical_df['traffic'].values.astype(np.float32),
-                'promo_flag': historical_df['promo_flag'].values,
-                'price': historical_df['price'].values.astype(np.float32),
-                'is_weekend': historical_df['is_weekend'].values,
-                'month': historical_df['month'].values,
-                'season': historical_df['season'].values,
-                'is_festival': historical_df['is_festival'].values,
-                'festival_name': historical_df['festival_name'].values,
+                'temperature': torch.tensor(historical_df['temperature'].values, dtype=torch.float32),
+                'stockout_flag': torch.tensor(historical_df['stockout_flag'].values, dtype=torch.float32),
+                'traffic': torch.tensor(historical_df['traffic'].values, dtype=torch.float32),
+                'promo_flag': torch.tensor(historical_df['promo_flag'].values, dtype=torch.long),
+                'price': torch.tensor(historical_df['price'].values, dtype=torch.float32),
+                'is_weekend': torch.tensor(historical_df['is_weekend'].values, dtype=torch.bool),
+                'month': torch.tensor(historical_df['month'].values, dtype=torch.long),
+                'season': torch.tensor(historical_df['season'].astype('category').cat.codes.values, dtype=torch.long),
+                'is_festival': torch.tensor(historical_df['is_festival'].values, dtype=torch.long),
+                'festival_name': torch.tensor(historical_df['festival_name'].astype('category').cat.codes.values, dtype=torch.long),
             },
             'future_covariates': {
-                # Use last known values for future (user can customize this)
-                'promo_flag': np.array([0] * 30),
-                'price': np.array([historical_df['price'].iloc[-1]] * 30, dtype=np.float32),
-                'is_weekend': np.array([False] * 30),
-                'month': np.array([historical_df['month'].iloc[-1]] * 30),
-                'season': np.array([historical_df['season'].iloc[-1]] * 30),
-                'is_festival': np.array([0] * 30),
-                'festival_name': np.array([''] * 30),
+                'promo_flag': torch.tensor([0] * 30, dtype=torch.long),
+                'price': torch.tensor([historical_df['price'].iloc[-1]] * 30, dtype=torch.float32),
+                'is_weekend': torch.tensor([False] * 30, dtype=torch.bool),
+                'month': torch.tensor([historical_df['month'].iloc[-1]] * 30, dtype=torch.long),
+                'season': torch.tensor([historical_df['season'].astype('category').cat.codes.iloc[-1]] * 30, dtype=torch.long),
+                'is_festival': torch.tensor([0] * 30, dtype=torch.long),
+                'festival_name': torch.tensor([0] * 30, dtype=torch.long),  # Empty string = 0
             }
         }
         
